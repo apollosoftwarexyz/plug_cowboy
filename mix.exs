@@ -3,7 +3,7 @@ defmodule Plug.Cowboy.MixProject do
 
   @source_url "https://github.com/apollosoftwarexyz/plug_cowboy"
   @upstream_source_url "https://github.com/elixir-plug/plug_cowboy"
-  @version "2.6.2"
+  @version "2.7.0"
   @description "A Plug adapter for Cowboy"
 
   def project do
@@ -42,7 +42,7 @@ defmodule Plug.Cowboy.MixProject do
       # HTTP request library for testing
       {:hackney, "~> 1.18.2", only: :test},
       # HTTP2 request library for testing
-      {:kadabra, "~> 0.6.0", only: :test},
+      {:kadabra, "~> 0.6.0", only: :test}
     ]
   end
 
@@ -55,7 +55,6 @@ defmodule Plug.Cowboy.MixProject do
   end
 
   defp aliases do
-    [
-    ]
+    []
   end
 end
