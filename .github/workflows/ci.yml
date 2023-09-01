@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  # Manual trigger
+  workflow_dispatch:
+  # Automated (push/pull request)
   pull_request:
   push:
     branches:
