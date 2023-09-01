@@ -109,34 +109,16 @@ defmodule Plug.Cowboy do
         log_exceptions_with_status_code: [400..599]
 
   By default, `Plug.Cowboy` includes the entire `conn` to the log metadata for exceptions.
-  However, this metadata may contain sensitive information such as security headers or 
+  However, this metadata may contain sensitive information such as security headers or
   cookies, which may be logged in plain text by certain logging backends. To prevent this,
   you can configure the `:conn_in_exception_metadata` option to not include the `conn` in the metadata.
 
       config :plug_cowboy,
         conn_in_exception_metadata: false
 
-  ## Instrumentation
-
-  Plug.Cowboy uses the `:telemetry` library for instrumentation. The following
-  span events are published during each request:
-
-    * `[:cowboy, :request, :start]` - dispatched at the beginning of the request
-    * `[:cowboy, :request, :stop]` - dispatched at the end of the request
-    * `[:cowboy, :request, :exception]` - dispatched at the end of a request that exits
-
-  A single event is published when the request ends with an early error:
-    * `[:cowboy, :request, :early_error]` - dispatched for requests terminated early by Cowboy
-
-  See [`cowboy_telemetry`](https://github.com/beam-telemetry/cowboy_telemetry#telemetry-events)
-  for more details on the events.
-
-  To opt-out of this default instrumentation, you can manually configure
-  cowboy with the option `stream_handlers: [:cowboy_stream_h]`.
-
   ## WebSocket support
 
-  Plug.Cowboy supports upgrading HTTP requests to WebSocket connections via 
+  Plug.Cowboy supports upgrading HTTP requests to WebSocket connections via
   the use of the `Plug.Conn.upgrade_adapter/3` function, called with `:websocket` as the second
   argument. Applications should validate that the connection represents a valid WebSocket request
   before calling this function (Cowboy will validate the connection as part of the upgrade
@@ -321,13 +303,6 @@ defmodule Plug.Cowboy do
         other -> :erlang.error({:badarg, [other]})
       end
 
-    :telemetry.attach(
-      :plug_cowboy,
-      [:cowboy, :request, :early_error],
-      &__MODULE__.handle_event/4,
-      nil
-    )
-
     apply(:cowboy, start, args(scheme, plug, opts, cowboy_options))
   end
 
@@ -382,7 +357,7 @@ defmodule Plug.Cowboy do
     [ref || build_ref(plug, scheme), transport_options, protocol_options]
   end
 
-  @default_stream_handlers [:cowboy_telemetry_h, :cowboy_stream_h]
+  @default_stream_handlers [:cowboy_stream_h]
 
   defp set_stream_handlers(opts) do
     compress = Keyword.get(opts, :compress)

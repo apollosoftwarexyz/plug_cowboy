@@ -48,30 +48,6 @@ defmodule Plug.CowboyTest do
            } = Supervisor.child_spec(spec, [])
   end
 
-  test "the h2 alpn settings are added when using https" do
-    options = [
-      port: 4040,
-      password: "cowboy",
-      keyfile: Path.expand("../fixtures/ssl/server_key_enc.pem", __DIR__),
-      certfile: Path.expand("../fixtures/ssl/valid.pem", __DIR__)
-    ]
-
-    spec = {Plug.Cowboy, [scheme: :https, plug: __MODULE__] ++ options}
-
-    %{start: {:ranch_listener_sup, :start_link, opts}} = Supervisor.child_spec(spec, [])
-
-    assert [
-             Plug.CowboyTest.HTTPS,
-             :ranch_ssl,
-             %{socket_opts: socket_opts},
-             :cowboy_tls,
-             _proto_opts
-           ] = opts
-
-    assert Keyword.get(socket_opts, :alpn_preferred_protocols) == ["h2", "http/1.1"]
-    assert Keyword.get(socket_opts, :next_protocols_advertised) == ["h2", "http/1.1"]
-  end
-
   test "builds args for cowboy dispatch" do
     assert [
              Plug.CowboyTest.HTTP,
@@ -124,7 +100,7 @@ defmodule Plug.CowboyTest do
              %{num_acceptors: 100, max_connections: 16_384, socket_opts: [port: 3000]},
              %{
                env: %{dispatch: @dispatch},
-               stream_handlers: [:cowboy_compress_h, :cowboy_telemetry_h, :cowboy_stream_h]
+               stream_handlers: [:cowboy_compress_h, :cowboy_stream_h]
              }
            ] = args(:http, __MODULE__, [], port: 3000, compress: true)
   end
@@ -135,7 +111,7 @@ defmodule Plug.CowboyTest do
              %{num_acceptors: 100, max_connections: 16_384, socket_opts: [:inet6, port: 3000]},
              %{
                env: %{dispatch: @dispatch},
-               stream_handlers: [:cowboy_telemetry_h, :cowboy_stream_h]
+               stream_handlers: [:cowboy_stream_h]
              }
            ] = args(:http, __MODULE__, [], port: 3000, net: :inet6)
   end

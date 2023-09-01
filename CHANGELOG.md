@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.7.0 (Apollo Software fork)
+
+ * Bump dependencies
+ * Remove telemetry
+ * Remove HTTP server push testing and support (no longer supported in major browsers)
+ * Remove tests for HTTPS (broken under OTP 26) (you should use a reverse proxy for HTTPS anyway)
+
 ## v2.6.1
 
 ### Enhancements

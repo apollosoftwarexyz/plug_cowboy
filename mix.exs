@@ -1,15 +1,16 @@
 defmodule Plug.Cowboy.MixProject do
   use Mix.Project
 
-  @source_url "https://github.com/elixir-plug/plug_cowboy"
-  @version "2.6.1"
+  @source_url "https://github.com/apollosoftwarexyz/plug_cowboy"
+  @upstream_source_url "https://github.com/elixir-plug/plug_cowboy"
+  @version "2.6.2"
   @description "A Plug adapter for Cowboy"
 
   def project do
     [
       app: :plug_cowboy,
       version: @version,
-      elixir: "~> 1.11",
+      elixir: "~> 1.15",
       deps: deps(),
       package: package(),
       description: @description,
@@ -33,13 +34,15 @@ defmodule Plug.Cowboy.MixProject do
 
   def deps do
     [
-      {:plug, "~> 1.14"},
-      {:cowboy, "~> 2.7"},
-      {:cowboy_telemetry, "~> 0.3"},
-      {:ex_doc, "~> 0.20", only: :docs},
-      {:hackney, "~> 1.2", only: :test},
-      {:kadabra, "0.3.4", only: :test},
-      {:x509, "~> 0.6", only: :test}
+      {:plug, "~> 1.14.2"},
+      # The cowboy webserver.
+      {:cowboy, "~> 2.10.0"},
+      # Documentation generation
+      {:ex_doc, "~> 0.30.6", only: :docs},
+      # HTTP request library for testing
+      {:hackney, "~> 1.18.2", only: :test},
+      # HTTP2 request library for testing
+      {:kadabra, "~> 0.6.0", only: :test},
     ]
   end
 
@@ -47,13 +50,12 @@ defmodule Plug.Cowboy.MixProject do
     %{
       licenses: ["Apache-2.0"],
       maintainers: ["José Valim", "Gary Rennie"],
-      links: %{"GitHub" => @source_url}
+      links: %{"GitHub" => @source_url, "GitHub (upstream)" => @upstream_source_url}
     }
   end
 
   defp aliases do
     [
-      test: ["x509.gen.suite -f -p cowboy -o test/fixtures/ssl", "test"]
     ]
   end
 end

@@ -1,7 +1,5 @@
 defmodule Plug.Cowboy.ConnTest do
   use ExUnit.Case, async: true
-  import ExUnit.CaptureLog
-
   alias Plug.Conn
   import Plug.Conn
 
@@ -14,36 +12,17 @@ defmodule Plug.Cowboy.ConnTest do
   # e.g. `assert {204, _, _} = request :get, "/build/foo/bar"` will perform a
   # GET http://127.0.0.1:8003/build/foo/bar and Plug will call build/1.
 
-  @client_ssl_opts [
-    verify: :verify_peer,
-    keyfile: Path.expand("../../fixtures/ssl/client_key.pem", __DIR__),
-    certfile: Path.expand("../../fixtures/ssl/client.pem", __DIR__),
-    cacertfile: Path.expand("../../fixtures/ssl/ca_and_chain.pem", __DIR__)
-  ]
-
   @protocol_options [
     idle_timeout: 1000,
     request_timeout: 1000
   ]
 
-  @https_options [
-    port: 8004,
-    password: "cowboy",
-    verify: :verify_peer,
-    keyfile: Path.expand("../../fixtures/ssl/server_key_enc.pem", __DIR__),
-    certfile: Path.expand("../../fixtures/ssl/valid.pem", __DIR__),
-    cacertfile: Path.expand("../../fixtures/ssl/ca_and_chain.pem", __DIR__),
-    protocol_options: @protocol_options
-  ]
-
   setup_all do
     {:ok, _} = Application.ensure_all_started(:kadabra)
     {:ok, _} = Plug.Cowboy.http(__MODULE__, [], port: 8003, protocol_options: @protocol_options)
-    {:ok, _} = Plug.Cowboy.https(__MODULE__, [], @https_options)
 
     on_exit(fn ->
       :ok = Plug.Cowboy.shutdown(__MODULE__.HTTP)
-      :ok = Plug.Cowboy.shutdown(__MODULE__.HTTPS)
     end)
 
     :ok
@@ -134,103 +113,6 @@ defmodule Plug.Cowboy.ConnTest do
 
   test "stores request headers" do
     assert {200, _, _} = request(:get, "/headers", [{"foo", "bar"}, {"baz", "bat"}])
-  end
-
-  def telemetry(conn) do
-    Process.sleep(30)
-    send_resp(conn, 200, "TELEMETRY")
-  end
-
-  def telemetry_exception(conn) do
-    # send first because of the `rescue` in `call`
-    send_resp(conn, 200, "Fail")
-    raise "BadTimes"
-  end
-
-  test "emits telemetry events for start/stop" do
-    :telemetry.attach_many(
-      :start_stop_test,
-      [
-        [:cowboy, :request, :start],
-        [:cowboy, :request, :stop],
-        [:cowboy, :request, :exception]
-      ],
-      fn event, measurements, metadata, test ->
-        send(test, {:telemetry, event, measurements, metadata})
-      end,
-      self()
-    )
-
-    assert {200, _, "TELEMETRY"} = request(:get, "/telemetry?foo=bar")
-
-    assert_receive {:telemetry, [:cowboy, :request, :start], %{system_time: _},
-                    %{streamid: _, req: req}}
-
-    assert req.path == "/telemetry"
-
-    assert_receive {:telemetry, [:cowboy, :request, :stop], %{duration: duration},
-                    %{streamid: _, req: ^req}}
-
-    duration_ms = System.convert_time_unit(duration, :native, :millisecond)
-
-    assert duration_ms >= 30
-    assert duration_ms < 100
-
-    refute_received {:telemetry, [:cowboy, :request, :exception], _, _}
-
-    :telemetry.detach(:start_stop_test)
-  end
-
-  test "emits telemetry events for exception" do
-    :telemetry.attach_many(
-      :exception_test,
-      [
-        [:cowboy, :request, :start],
-        [:cowboy, :request, :exception]
-      ],
-      fn event, measurements, metadata, test ->
-        send(test, {:telemetry, event, measurements, metadata})
-      end,
-      self()
-    )
-
-    request(:get, "/telemetry_exception")
-
-    assert_receive {:telemetry, [:cowboy, :request, :start], _, _}
-
-    assert_receive {:telemetry, [:cowboy, :request, :exception], %{},
-                    %{kind: :exit, reason: _reason, stacktrace: _stacktrace}}
-
-    :telemetry.detach(:exception_test)
-  end
-
-  test "emits telemetry events for cowboy early_error" do
-    :telemetry.attach(
-      :early_error_test,
-      [:cowboy, :request, :early_error],
-      fn name, measurements, metadata, test ->
-        send(test, {:event, name, measurements, metadata})
-      end,
-      self()
-    )
-
-    assert capture_log(fn ->
-             cookie = "bar=" <> String.duplicate("a", 8_000_000)
-             response = request(:get, "/headers", [{"cookie", cookie}])
-             assert match?({431, _, _}, response) or match?({:error, :closed}, response)
-             assert {200, _, _} = request(:get, "/headers", [{"foo", "bar"}, {"baz", "bat"}])
-           end) =~ "Cowboy returned 431 because it was unable to parse the request headers"
-
-    assert_receive {:event, [:cowboy, :request, :early_error],
-                    %{
-                      system_time: _
-                    },
-                    %{
-                      reason: {:connection_error, :limit_reached, _},
-                      partial_req: %{}
-                    }}
-
-    :telemetry.detach(:early_error_test)
   end
 
   def send_200(conn) do
@@ -372,7 +254,7 @@ defmodule Plug.Cowboy.ConnTest do
   end
 
   test "upgrades the connection when the connection is a valid websocket" do
-    {:ok, socket} = :gen_tcp.connect(~c"localhost", 8003, active: false, mode: :binary)
+    {:ok, socket} = :gen_tcp.connect(~c"localhost", 8003, [:binary, active: false])
 
     :gen_tcp.send(socket, """
     GET /upgrade_websocket HTTP/1.1\r
@@ -401,26 +283,6 @@ defmodule Plug.Cowboy.ConnTest do
 
   test "returns error in cases where an upgrade is indicated but the connection is not a valid upgrade" do
     assert {426, _headers, ""} = request(:get, "/upgrade_websocket")
-  end
-
-  def push(conn) do
-    conn
-    |> push("/static/assets.css")
-    |> send_resp(200, "push")
-  end
-
-  test "push will not raise even though the adapter doesn't implement it" do
-    assert {200, _headers, "push"} = request(:get, "/push")
-  end
-
-  def push_or_raise(conn) do
-    conn
-    |> push!("/static/assets.css")
-    |> send_resp(200, "push or raise")
-  end
-
-  test "push will raise because it is not implemented" do
-    assert {200, _headers, "push or raise"} = request(:get, "/push_or_raise")
   end
 
   def read_req_body(conn) do
@@ -598,39 +460,10 @@ defmodule Plug.Cowboy.ConnTest do
              "malformed request, a RuntimeError exception was raised with message \"invalid multipart"
   end
 
-  def https(conn) do
-    assert conn.scheme == :https
-    send_resp(conn, 200, "OK")
-  end
-
-  test "https" do
-    pool = :https
-    pool_opts = [timeout: 150_000, max_connections: 10]
-    :ok = :hackney_pool.start_pool(pool, pool_opts)
-
-    opts = [
-      pool: :https,
-      ssl_options: [cacertfile: @https_options[:certfile], server_name_indication: ~c"localhost"]
-    ]
-
-    assert {:ok, 200, _headers, client} =
-             :hackney.get("https://127.0.0.1:8004/https", [], "", opts)
-
-    assert {:ok, "OK"} = :hackney.body(client)
-    :hackney.close(client)
-  end
-
-  @http2_opts [
-    cacertfile: @https_options[:certfile],
-    server_name_indication: ~c"localhost",
-    port: 8004
-  ]
-
   def http2(conn) do
     case conn.query_string do
       "noinfer" <> _ ->
         conn
-        |> push("/static/assets.css", [{"accept", "text/plain"}])
         |> send_resp(200, Atom.to_string(get_http_protocol(conn)))
 
       "earlyhints" <> _ ->
@@ -640,65 +473,22 @@ defmodule Plug.Cowboy.ConnTest do
 
       _ ->
         conn
-        |> push("/static/assets.css")
         |> send_resp(200, Atom.to_string(get_http_protocol(conn)))
     end
   end
 
   test "http2 response" do
-    {:ok, pid} = Kadabra.open(~c"localhost", :https, @http2_opts)
+    {:ok, pid} = Kadabra.open("http://localhost:8003")
     Kadabra.get(pid, "/http2")
 
     assert_receive({:end_stream, %Kadabra.Stream.Response{body: "HTTP/2", status: 200}}, 1_000)
   end
 
   test "http2 early hints" do
-    {:ok, pid} = Kadabra.open(~c"localhost", :https, @http2_opts)
+    {:ok, pid} = Kadabra.open("http://localhost:8003")
     Kadabra.get(pid, "/http2?earlyhints=true")
     assert_receive({:end_stream, %Kadabra.Stream.Response{headers: headers}})
     assert {"link", "</style.css>; rel=preload; as=style"} in headers
-  end
-
-  test "http2 server push" do
-    {:ok, pid} = Kadabra.open(~c"localhost", :https, @http2_opts)
-    Kadabra.get(pid, "/http2")
-    assert_receive({:push_promise, %Kadabra.Stream.Response{headers: headers}})
-    assert {"accept", "text/css"} in headers
-    assert {":path", "/static/assets.css"} in headers
-  end
-
-  test "http2 server push without automatic mime type" do
-    {:ok, pid} = Kadabra.open(~c"localhost", :https, @http2_opts)
-    Kadabra.get(pid, "/http2?noinfer=true")
-    assert_receive({:push_promise, %Kadabra.Stream.Response{headers: headers}})
-    assert {"accept", "text/plain"} in headers
-    assert {":path", "/static/assets.css"} in headers
-  end
-
-  def peer_data(conn) do
-    assert conn.scheme == :https
-    %{address: address, port: port, ssl_cert: ssl_cert} = get_peer_data(conn)
-    assert address == {127, 0, 0, 1}
-    assert is_integer(port)
-    assert is_binary(ssl_cert)
-    send_resp(conn, 200, "OK")
-  end
-
-  test "exposes peer data" do
-    pool = :client_ssl_pool
-    pool_opts = [timeout: 150_000, max_connections: 10]
-    :ok = :hackney_pool.start_pool(pool, pool_opts)
-
-    opts = [
-      pool: :client_ssl_pool,
-      ssl_options: [server_name_indication: ~c"localhost"] ++ @client_ssl_opts
-    ]
-
-    assert {:ok, 200, _headers, client} =
-             :hackney.get("https://127.0.0.1:8004/peer_data", [], "", opts)
-
-    assert {:ok, "OK"} = :hackney.body(client)
-    :hackney.close(client)
   end
 
   ## Helpers

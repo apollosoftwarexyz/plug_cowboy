@@ -27,9 +27,17 @@ defmodule WebSocketHandlerTest do
   ]
 
   setup_all do
+    # Initialize the server and get the port.
     {:ok, _} = Plug.Cowboy.http(__MODULE__, [], port: 0, protocol_options: @protocol_options)
     on_exit(fn -> :ok = Plug.Cowboy.shutdown(__MODULE__.HTTP) end)
-    {:ok, port: :ranch.get_port(__MODULE__.HTTP)}
+    port = :ranch.get_port(__MODULE__.HTTP)
+
+    # Connect a TCP client to the port and perform the HTTP1 handshake.
+    client = tcp_client(port)
+    http1_handshake(client, WebSocketHandler)
+
+    # Return the port and client in the context.
+    {:ok, port: port, client: client}
   end
 
   @behaviour Plug
@@ -45,8 +53,7 @@ defmodule WebSocketHandlerTest do
   end
 
   test "websocket_init and websocket_handle are called", context do
-    client = tcp_client(context)
-    http1_handshake(client, WebSocketHandler)
+    client = context[:client]
 
     send_text_frame(client, "state")
     {:ok, result} = recv_text_frame(client)
@@ -54,8 +61,7 @@ defmodule WebSocketHandlerTest do
   end
 
   test "websocket_info is called", context do
-    client = tcp_client(context)
-    http1_handshake(client, WebSocketHandler)
+    client = context[:client]
 
     send_text_frame(client, "whoami")
     {:ok, pid} = recv_text_frame(client)
@@ -69,8 +75,8 @@ defmodule WebSocketHandlerTest do
 
   # Simple WebSocket client
 
-  def tcp_client(context) do
-    {:ok, socket} = :gen_tcp.connect(~c"localhost", context[:port], active: false, mode: :binary)
+  def tcp_client(port) do
+    {:ok, socket} = :gen_tcp.connect(~c"localhost", port, mode: :binary, active: false)
 
     socket
   end
