@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  # Manual trigger
+  workflow_dispatch:
+  # Automated (push/pull request)
   pull_request:
   push:
     branches:
@@ -8,7 +11,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       MIX_ENV: test
     strategy:
@@ -16,8 +19,8 @@ jobs:
       matrix:
         include:
           - pair:
-              elixir: 1.11.4
-              otp: 23.2.7
+              elixir: 1.15.5
+              otp: 26.0.2
           - pair:
               elixir: 1.13.3
               otp: 24.2.2
